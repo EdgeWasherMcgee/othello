@@ -1,24 +1,31 @@
 #include <iostream>
 #include <fstream>
 #include <cstring>
+#include <unistd.h>
 
 class board{ //Low teir class that makes manages the file. This is the only function that is supposed to write to the othello-board file.
     private: //Initializing things that has to be made before the public functions
         char fileInp[1];
         std::string txtfile;
         std::fstream f;
+        typedef enum player {NO_PLAYER = '0', PLAYER_1 = '1', PLAYER_2 = '2'} PLAYER;
     public:
         board(std::string txtfile, bool empty){
             this->txtfile = txtfile;
-            f.open(this->txtfile, std::ios::out | std::ios::in | std::ios::binary );
+            f.open(this->txtfile, std::ios::out | std::ios::in | std::ios::binary);
             if (empty){
                 initBoard();
+            }
+            else{
+                if (!is_allowed()){
+                    std::cout << "File is not a board" << std::endl;
+                }
             }
             if (!f){
                 std::cout << "Opening file failed" << std::endl;
             }
         }
-        board() : board("oBoard.txt", true){
+        board() : board("oBoard.brd", true){
         }
         ~board(){
             f.close();
@@ -36,24 +43,12 @@ class board{ //Low teir class that makes manages the file. This is the only func
             return valAscii;
         }
         void printFile(){ //Is supposed to print the whole board
-            for (int i = 0; i < 64; i++){
-                std::printf("%c", getP(i % 8, i / 8));
-            }
-            std::cout << std::endl;
-        }
-
-        bool is_allowed(){
-            bool allowed = true;
-            f.seekg(0, std::ios::end);
-            if (f.tellg() != 64){
-                allowed = false;
-            }
-            for (int i = 0; i < 64; i++){
-                if (getP(i%8, i/8) > PLAYER_2 or getP(i%8, i/8) < NO_PLAYER){
-                    allowed = false;
+            for (int i = 0; i < 8; i++){
+                for (int j = 0; j < 8; j++){
+                    std::printf("%c", getP(j, i));
                 }
+            std::cout << std::endl;
             }
-            return allowed;
         }
 
     private:
@@ -65,6 +60,19 @@ class board{ //Low teir class that makes manages the file. This is the only func
             }
             f.write(initFile, 64);
         }
+        bool is_allowed(){
+            bool allowed = true;
+            f.seekg(0, std::ios::end);
+            if (f.tellg() != 65){
+                allowed = false;
+            }
+            for (int i = 0; i < 64; i++){
+                if (getP(i%8, i/8) > PLAYER_2 or getP(i%8, i/8) < NO_PLAYER){
+                    allowed = false;
+                }
+            }
+            return allowed;
+        }
 };
 
 class othello_controller{
@@ -72,31 +80,36 @@ class othello_controller{
         board* brd;
         typedef enum player {NO_PLAYER = '0', PLAYER_1 = '1', PLAYER_2 = '2'} PLAYER;
     public:
-        othello_controller(std::string name){
-            brd = new board(name, true);
+        othello_controller(std::string name, bool wr){
+            brd = new board(name, wr);
         }
-        othello_controller(): othello_controller("oBoard.txt"){
+        othello_controller(): othello_controller("oBoard.brd", true){
         }
 
         void test1(){
-
-        } 
+            brd->printFile();
+            std::cout << layable(PLAYER_1, 3, 2, true) << std::endl;
+            brd->printFile();
+            std::cout << layable(PLAYER_2, 3, 2, true) << std::endl;
+            brd->printFile();
+            delete brd;
+        }
 
     private:
 
-        int layable(PLAYER player, int x, int y){
+        int layable(PLAYER player, int x, int y, bool turn){
             int switches = 0;
             if (occupied(x, y)){
                 return 0;
             }
-            switches = switches + check(player, x, y, 0, -1);
-            switches = switches + check(player, x, y, 1, -1);
-            switches = switches + check(player, x, y, 1, 0);
-            switches = switches + check(player, x, y, 1, 1);
-            switches = switches + check(player, x, y, 0, 1);
-            switches = switches + check(player, x, y, -1, 1);
-            switches = switches + check(player, x, y, -1, 0);
-            switches = switches + check(player, x, y, -1, -1);
+            switches = switches + check(player, x, y, 0, -1, turn);
+            switches = switches + check(player, x, y, 1, -1, turn);
+            switches = switches + check(player, x, y, 1, 0, turn);
+            switches = switches + check(player, x, y, 1, 1, turn);
+            switches = switches + check(player, x, y, 0, 1, turn);
+            switches = switches + check(player, x, y, -1, 1, turn);
+            switches = switches + check(player, x, y, -1, 0, turn);
+            switches = switches + check(player, x, y, -1, -1, turn);
             
             return switches;
         }
@@ -114,39 +127,36 @@ class othello_controller{
         }
 
         bool occupied(int x, int y){ //Returns true if the position value is the same as NO_PLAYER, and false if it is any other value
-            if (not brd->getP(x, y)){
-                return true;
-            }
-            return false;
+            return !(brd->getP(x, y) == NO_PLAYER);
         }
 
-        int check(PLAYER player,int x, int y, int stepx, int stepy){
-            int c = 0;
+        int check(PLAYER player,int x, int y, int stepx, int stepy, bool turn){
+            int counter = 0;
             while (true){
                 x = x + stepx;
                 y = y + stepy;
                 if (out_of_bounds(x, y) or brd->getP(x, y) == NO_PLAYER){
-                    break;
+                    return 0;
                 }
                 if (brd->getP(x, y) == player){
-                    return c;
+                    break;
                 }
-                c++;
+                counter++;
             }
-            return 0;
+            if (turn){
+                for (int i = 0; i < counter + 1; i++){
+                    x = x - stepx;
+                    y = y - stepy;
+                    brd->setP(x, y, player);
+                }
+                
+            }
+            return counter;
         }
 
         bool out_of_bounds(int x, int y){
-            if (x > 7 or x < 0 or y > 7 or y < 0){
-                return false;
-            }
-            else return true;
+            return x > 7 || x < 0 || y > 7 || y < 0;
         }
-
-        int check_diags(int x, int y){
-            
-        }
-
         //char* tileSwitch(int x, int y, enum* player){
         //    return *'0'; 
         //}
@@ -164,7 +174,9 @@ class othello_controller{
 
 
 int main(int argc, char* argv[]){
-    othello_controller oc("oBoard.txt");
+    othello_controller oc("test1.brd", false);
     oc.test1();
     return 0;
 }
+
+
